@@ -151,6 +151,8 @@ private fun SurajSongHome() {
             }
         }
 
+        SocialAccountsCard(preferences = preferences)
+
         Text("Studio roadmap", style = MaterialTheme.typography.titleLarge)
         StudioFeatureCard("Music + AI Vocal", "ACE-Step self-hosted GPU worker · original songs")
         StudioFeatureCard("AI Music Video", "ComfyUI images + FFmpeg MP4 rendering")
@@ -190,6 +192,41 @@ private fun requestLyrics(baseUrl: String, topic: String, language: String): JSO
         return JSONObject(body)
     } finally {
         connection.disconnect()
+    }
+}
+
+
+@Composable
+private fun SocialAccountsCard(preferences: android.content.SharedPreferences) {
+    var youtube by remember { mutableStateOf(preferences.getString("social_youtube", "") ?: "") }
+    var facebook by remember { mutableStateOf(preferences.getString("social_facebook", "") ?: "") }
+    var instagram by remember { mutableStateOf(preferences.getString("social_instagram", "") ?: "") }
+    var x by remember { mutableStateOf(preferences.getString("social_x", "") ?: "") }
+    var saved by remember { mutableStateOf(false) }
+
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Social accounts", style = MaterialTheme.typography.titleLarge)
+            Text("আপনার channel ও page link যোগ করুন। পরে video publish করার সময় এগুলো ব্যবহার করা যাবে।", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(value = youtube, onValueChange = { youtube = it; saved = false }, modifier = Modifier.fillMaxWidth(), label = { Text("YouTube channel URL") }, singleLine = true)
+            OutlinedTextField(value = facebook, onValueChange = { facebook = it; saved = false }, modifier = Modifier.fillMaxWidth(), label = { Text("Facebook Page URL") }, singleLine = true)
+            OutlinedTextField(value = instagram, onValueChange = { instagram = it; saved = false }, modifier = Modifier.fillMaxWidth(), label = { Text("Instagram profile URL") }, singleLine = true)
+            OutlinedTextField(value = x, onValueChange = { x = it; saved = false }, modifier = Modifier.fillMaxWidth(), label = { Text("X (Twitter) profile URL") }, singleLine = true)
+            Button(
+                onClick = {
+                    preferences.edit()
+                        .putString("social_youtube", youtube.trim())
+                        .putString("social_facebook", facebook.trim())
+                        .putString("social_instagram", instagram.trim())
+                        .putString("social_x", x.trim())
+                        .apply()
+                    saved = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Save social links") }
+            if (saved) Text("Social links saved on this device.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            Text("Note: link save করা মানেই account connect বা auto-post চালু হওয়া নয়। Publishing-এর জন্য প্রতিটি platform-এর official authorization/API integration লাগবে.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
