@@ -2,6 +2,8 @@ package com.surajsong.studio
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,6 +26,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -60,9 +65,22 @@ private fun SurajSongHome() {
     var language by remember { mutableStateOf("bn") }
     var duration by remember { mutableIntStateOf(4) }
     var lyrics by remember { mutableStateOf("") }
+    var songId by remember { mutableStateOf("") }
+    var isGeneratingMusic by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Connect your backend to start creating songs.") }
     var isGenerating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val saveLyricsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(lyrics.toByteArray(Charsets.UTF_8)) }
+                status = "Lyrics ফাইল হিসেবে save হয়েছে।"
+            } catch (error: Exception) {
+                status = "Lyrics save করা যায়নি: ${error.message}"
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -135,6 +153,7 @@ private fun SurajSongHome() {
                                         requestLyrics(backendUrl, topic, language, duration)
                                     }
                                     lyrics = result.optString("lyrics")
+                                    songId = result.optString("id")
                                     status = "Lyrics তৈরি হয়েছে। Music worker status: " +
                                         if (result.optBoolean("music_worker_configured")) "connected" else "not connected yet"
                                 } catch (error: Exception) {
@@ -158,9 +177,50 @@ private fun SurajSongHome() {
 
         if (lyrics.isNotBlank()) {
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Generated lyrics", style = MaterialTheme.typography.titleLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            clipboard.setText(AnnotatedString(lyrics))
+                            status = "Lyrics clipboard-এ copy হয়েছে।"
+                        }) { Text("Copy lyrics") }
+                        OutlinedButton(onClick = {
+                            saveLyricsLauncher.launch("SurajSong-lyrics.txt")
+                        }) { Text("Save .txt") }
+                    }
                     Text(lyrics, style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = {
+                            if (songId.isBlank()) {
+                                status = "প্রথমে নতুন lyrics generate করুন।"
+                            } else {
+                                scope.launch {
+                                    isGeneratingMusic = true
+                                    status = "Music worker-এ request পাঠানো হচ্ছে…"
+                                    try {
+                                        val result = withContext(Dispatchers.IO) {
+                                            requestMusic(backendUrl, songId)
+                                        }
+                                        status = "Music job submitted: " + result.optString("status")
+                                    } catch (error: Exception) {
+                                        status = error.message ?: "Music generation request failed."
+                                    } finally {
+                                        isGeneratingMusic = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isGeneratingMusic,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isGeneratingMusic) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                        else Text("Generate Music + AI Vocal")
+                    }
+                    Text(
+                        "Music generation requires a configured ACE-Step GPU worker. Worker না থাকলে API পরিষ্কার error দেখাবে; শুধু button থাকলেই গান তৈরি হবে না।",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -177,6 +237,32 @@ private fun SurajSongHome() {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+private fun requestMusic(baseUrl: String, songId: String): JSONObject {
+    val normalized = baseUrl.trim().trimEnd('/')
+    require(normalized.startsWith("https://")) { "Backend URL অবশ্যই https:// দিয়ে শুরু হতে হবে।" }
+    val connection = (URL("$normalized/api/v1/songs/$songId/generate-music").openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"
+        connectTimeout = 15000
+        readTimeout = 900000
+        doOutput = true
+        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+    }
+    try {
+        val payload = JSONObject().put("style_prompt", "Automatically choose a suitable genre, mood, tempo and arrangement for an original Bengali or Hindi song with expressive AI vocals.")
+        connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = try { JSONObject(body).optString("detail", body) } catch (_: Exception) { body }
+            throw IllegalStateException("API $code: $detail")
+        }
+        return JSONObject(body)
+    } finally {
+        connection.disconnect()
     }
 }
 
