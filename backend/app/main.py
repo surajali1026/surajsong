@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("SURAJSONG_DB_PATH", str(APP_DIR / "surajsong.db")))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 ACESTEP_WORKER_URL = os.getenv("ACESTEP_WORKER_URL", "").rstrip("/")
 
 app = FastAPI(
