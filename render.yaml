@@ -15,5 +15,7 @@ services:
         value: gemini-3.5-flash-lite
       - key: ACESTEP_WORKER_URL
         sync: false
+      - key: ACESTEP_API_KEY
+        sync: false
       - key: SURAJSONG_DB_PATH
         value: /tmp/surajsong.db
