@@ -1,6 +1,8 @@
 package com.surajsong.studio
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -67,6 +70,7 @@ private fun SurajSongHome() {
     var lyrics by remember { mutableStateOf("") }
     var songId by remember { mutableStateOf("") }
     var isGeneratingMusic by remember { mutableStateOf(false) }
+    var musicAudioReady by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Connect your backend to start creating songs.") }
     var isGenerating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -95,7 +99,7 @@ private fun SurajSongHome() {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
         )
-        Text("একটি topic লিখুন। AI lyrics তৈরি করবে; music ও vocal worker পরের ধাপে যুক্ত হবে।")
+        Text("একটি topic লিখুন। বাংলা বা হিন্দি lyrics তৈরি করুন, তারপর AI music ও vocal generate করুন।")
 
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -198,10 +202,34 @@ private fun SurajSongHome() {
                                     isGeneratingMusic = true
                                     status = "Music worker-এ request পাঠানো হচ্ছে…"
                                     try {
+                                        musicAudioReady = false
                                         val result = withContext(Dispatchers.IO) {
                                             requestMusic(backendUrl, songId)
                                         }
-                                        status = "Music job submitted: " + result.optString("status")
+                                        status = "Music generation queue-তে যোগ হয়েছে। গান তৈরি হচ্ছে…"
+                                        var completed = false
+                                        repeat(180) {
+                                            delay(10000)
+                                            val progress = withContext(Dispatchers.IO) {
+                                                requestMusicStatus(backendUrl, songId)
+                                            }
+                                            when (progress.optString("status")) {
+                                                "music_ready" -> {
+                                                    musicAudioReady = true
+                                                    status = "তোমার গান তৈরি হয়েছে! Play generated song চাপো।"
+                                                    completed = true
+                                                    return@repeat
+                                                }
+                                                "music_failed" -> {
+                                                    status = "Music generation failed: " + progress.optString("error", "Unknown worker error")
+                                                    completed = true
+                                                    return@repeat
+                                                }
+                                                else -> status = "গান তৈরি হচ্ছে… GPU worker-এর কাজ শেষ হওয়া পর্যন্ত অপেক্ষা করো।"
+                                            }
+                                            if (completed) return@repeat
+                                        }
+                                        if (!completed) status = "Music job এখনো চলছে। পরে আবার status check করো।";
                                     } catch (error: Exception) {
                                         status = error.message ?: "Music generation request failed."
                                     } finally {
@@ -216,8 +244,17 @@ private fun SurajSongHome() {
                         if (isGeneratingMusic) CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                         else Text("Generate Music + AI Vocal")
                     }
+                    if (musicAudioReady) {
+                        OutlinedButton(
+                            onClick = {
+                                val audioUrl = backendUrl.trim().trimEnd('/') + "/api/v1/songs/" + songId + "/audio"
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(audioUrl)).setDataAndType(Uri.parse(audioUrl), "audio/mpeg"))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Play generated song") }
+                    }
                     Text(
-                        "Music generation requires a configured ACE-Step GPU worker. Worker না থাকলে API পরিষ্কার error দেখাবে; শুধু button থাকলেই গান তৈরি হবে না।",
+                        "Music generation runs on the connected ACE-Step GPU worker. The app checks job status automatically and shows the audio when ready.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -253,6 +290,28 @@ private fun requestMusic(baseUrl: String, songId: String): JSONObject {
     try {
         val payload = JSONObject().put("style_prompt", "Automatically choose a suitable genre, mood, tempo and arrangement for an original Bengali or Hindi song with expressive AI vocals.")
         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+        val code = connection.responseCode
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (code !in 200..299) {
+            val detail = try { JSONObject(body).optString("detail", body) } catch (_: Exception) { body }
+            throw IllegalStateException("API $code: $detail")
+        }
+        return JSONObject(body)
+    } finally {
+        connection.disconnect()
+    }
+}
+
+
+private fun requestMusicStatus(baseUrl: String, songId: String): JSONObject {
+    val normalized = baseUrl.trim().trimEnd('/')
+    val connection = (URL("$normalized/api/v1/songs/$songId/music-status").openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 15000
+        readTimeout = 30000
+    }
+    try {
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
