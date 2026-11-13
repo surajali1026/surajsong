@@ -81,7 +81,7 @@ Requirements:
         async with httpx.AsyncClient(timeout=90) as client:
             response = await client.post(
                 url,
-                params={"key": GEMINI_API_KEY},
+                headers={"x-goog-api-key": GEMINI_API_KEY},
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {"temperature": 0.85, "maxOutputTokens": 4096},
