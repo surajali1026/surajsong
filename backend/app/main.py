@@ -38,9 +38,13 @@ def init_db():
                 language TEXT NOT NULL,
                 lyrics TEXT NOT NULL,
                 status TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                duration_minutes INTEGER NOT NULL DEFAULT 4
             )
         """)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(songs)")}
+        if "duration_minutes" not in columns:
+            connection.execute("ALTER TABLE songs ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 4")
 
 
 init_db()
@@ -128,8 +132,8 @@ async def create_song(request: SongRequest):
     created_at = datetime.now(timezone.utc).isoformat()
     with db() as connection:
         connection.execute(
-            "INSERT INTO songs (id, topic, language, lyrics, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (song_id, request.topic, request.language, lyrics, status, created_at),
+            "INSERT INTO songs (id, topic, language, lyrics, status, created_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (song_id, request.topic, request.language, lyrics, status, created_at, request.duration_minutes),
         )
     return {
         "id": song_id,
@@ -172,7 +176,7 @@ async def generate_music(song_id: str, request: MusicRequest):
                     "project_id": song_id,
                     "lyrics": row["lyrics"],
                     "language": row["language"],
-                    "duration_minutes": 4,
+                    "duration_minutes": row["duration_minutes"],
                     "style_prompt": request.style_prompt,
                     "seed": request.seed,
                 },
