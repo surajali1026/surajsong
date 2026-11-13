@@ -1,38 +1,42 @@
-# SurajSong — AI Bengali Music Studio
+# SurajSong — AI Bengali & Hindi Music Studio
 
-An Android-first AI music and music-video creation studio.
+Android-first studio for creating original Bengali/Hindi songs and music videos.
 
-## Product goals
-- Generate original Bengali and Hindi lyrics from a topic.
-- Automatically select a suitable genre, mood, tempo and AI singer.
-- Generate a complete 3–5 minute song and export MP3.
-- Analyze the song and create matching AI images plus one thumbnail.
-- Render an MP4 music video with transitions and audio synchronization.
-- Connect the user's YouTube channel and upload or schedule videos after explicit authorization.
+## Product workflow
+1. Enter a topic and choose Bengali or Hindi.
+2. Generate structured, original lyrics.
+3. Generate a 3–5 minute song with an AI singer and arrangement.
+4. Create song-matched images and a thumbnail.
+5. Render an MP4 with FFmpeg.
+6. Optionally upload or schedule it to the user's YouTube channel after OAuth consent.
 
-## Important implementation principles
-- Android is the primary user interface. Users should be able to manage the complete workflow from the Android app.
-- Heavy generative models may need a separate worker/server or a supported hosted inference provider; do not assume a phone can run every model.
-- Prefer open-source models and free tiers, but clearly show limits, queue status and any possible costs. Never silently use paid APIs.
-- Keep provider integrations behind interfaces so models can be changed without rewriting the app.
-- Keep API keys and YouTube OAuth secrets out of the APK.
-- Only generate or upload audio the user owns or is authorized to use. Use original lyrics, music and properly licensed assets.
+## Free-first, best-quality architecture
 
-## Initial development milestone
-Build the native Android shell, topic/language input, project list, backend connection interface and CI build. AI generation providers will be integrated in later milestones after their licensing, hardware and free-tier constraints are verified.
+| Stage | Selected technology | Cost approach |
+|---|---|---|
+| Lyrics | Gemini Developer API (model configurable) | Start on eligible free tier; quotas and terms may change |
+| Music + vocals | ACE-Step self-hosted worker | Open-source project; needs GPU compute and checkpoint-license review |
+| Images | ComfyUI + separately licensed checkpoint | Self-host to avoid per-image API fees |
+| MP4 | FFmpeg | Open-source processing on worker |
+| YouTube | YouTube Data API v3 + OAuth | API quota based; user's explicit authorization |
+
+**Important:** "Free" means no paid per-call API plan is required for the self-hosted models; it does not mean unlimited free GPU hosting. A suitable GPU, storage, electricity and deployment may still cost money. ACE-Step's own project notes that less-common languages can underperform; Bengali/Hindi vocal quality must be tested with sample songs before promising studio-grade results. Check the exact model checkpoint's license before commercial publishing.
+
+## Current implementation
+- Native Android app connects to a configurable HTTPS backend URL.
+- Android app can submit a Bengali/Hindi topic and display generated lyrics.
+- FastAPI backend exposes health/config, lyrics/song creation, project retrieval and ACE-Step worker handoff endpoints.
+- Gemini API key is read only from backend environment variables; never store provider secrets in the APK.
+- SQLite project storage is currently for development. Production needs persistent storage or PostgreSQL, authentication and a job queue.
+- Music generation, ComfyUI image generation, MP4 rendering and YouTube OAuth/upload are planned integration steps, not yet fully wired end-to-end.
+
+## Backend setup
+See [backend/README.md](backend/README.md) and [backend/.env.example](backend/.env.example).
+
+## Android build
+GitHub Actions builds a debug APK. Open the latest successful run and download the `surajsong-debug-apk` artifact.
 
 ## Repository layout
-- `android/`: Kotlin + Jetpack Compose application
-- `backend/`: FastAPI service scaffold and future generation jobs
+- `android/`: Kotlin + Jetpack Compose app
+- `backend/`: FastAPI API and provider adapters
 - `.github/workflows/`: Android CI
-
-## Build
-The GitHub Actions workflow builds the Android debug APK using Gradle 8.9 and JDK 17.
-
-## Planned phases
-1. Android app foundation and CI.
-2. Lyrics generation (Bengali/Hindi).
-3. Music + singing model adapter and MP3 export.
-4. Song analysis, AI images and thumbnail.
-5. FFmpeg-based MP4 rendering.
-6. YouTube OAuth, upload and scheduling.
