@@ -116,17 +116,23 @@ Requirements:
                 headers={"x-goog-api-key": GEMINI_API_KEY},
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.85, "maxOutputTokens": 4096},
+                    "generationConfig": {"maxOutputTokens": 4096},
                 },
             )
         response.raise_for_status()
         payload = response.json()
         return payload["candidates"][0]["content"]["parts"][0]["text"].strip()
     except httpx.HTTPStatusError as error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Lyrics provider returned HTTP {error.response.status_code}. Check the Gemini API key, model access, and quota in the backend environment.",
-        ) from error
+        # Preserve Google's actionable error message for server logs and API clients.
+        try:
+            provider_error = error.response.json().get("error", {}).get("message", "")
+        except (ValueError, AttributeError):
+            provider_error = ""
+        safe_message = str(provider_error).replace(GEMINI_API_KEY, "[redacted]")[:500]
+        detail = f"Lyrics provider returned HTTP {error.response.status_code}"
+        if safe_message:
+            detail += f": {safe_message}"
+        raise HTTPException(status_code=502, detail=detail) from error
     except (httpx.HTTPError, KeyError, IndexError, TypeError) as error:
         raise HTTPException(status_code=502, detail="Lyrics generation failed: invalid provider configuration or network response.") from error
 
