@@ -15,7 +15,12 @@ from pydantic import BaseModel, Field
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("SURAJSONG_DB_PATH", str(APP_DIR / "surajsong.db")))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+GEMINI_MODEL_RAW = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+# Accept either the bare model ID or Google's "models/<id>" resource format.
+GEMINI_MODEL = GEMINI_MODEL_RAW.removeprefix("models/").strip()
+if GEMINI_MODEL.lower() == "gemini 3.5 flash-lite":
+    GEMINI_MODEL = "gemini-3.5-flash-lite"
+
 # This must be the ACE-Step REST API base URL (normally port 8001), not its Gradio UI URL.
 ACESTEP_WORKER_URL = os.getenv("ACESTEP_WORKER_URL", "").rstrip("/")
 ACESTEP_API_KEY = os.getenv("ACESTEP_API_KEY", "").strip()
