@@ -95,10 +95,15 @@ Requirements:
         payload = response.json()
         return payload["candidates"][0]["content"]["parts"][0]["text"].strip()
     except httpx.HTTPStatusError as error:
-        message = error.response.text[:500]
-        raise HTTPException(status_code=502, detail=f"Lyrics provider error: {message}") from error
+        # Do not echo upstream bodies: provider responses can contain sensitive request details.
+        raise HTTPException(
+            status_code=502,
+            detail=f"Lyrics provider returned HTTP {error.response.status_code}. Check the Gemini API key, model access, and quota in the backend environment.",
+        ) from error
     except (httpx.HTTPError, KeyError, IndexError, TypeError) as error:
-        raise HTTPException(status_code=502, detail=f"Lyrics generation failed: {error}") from error
+        # Keep diagnostics useful without returning request headers or credentials to the Android client.
+        safe_message = "Invalid Gemini API configuration or network response."
+        raise HTTPException(status_code=502, detail=f"Lyrics generation failed: {safe_message}") from error
 
 
 @app.get("/health")
