@@ -1,0 +1,15 @@
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/storage/
+backend/.pytest_cache/
