@@ -208,7 +208,7 @@ private fun SurajSongHome() {
                                         }
                                         status = "Music generation queue-তে যোগ হয়েছে। গান তৈরি হচ্ছে…"
                                         var completed = false
-                                        repeat(180) {
+                                        for (attempt in 0 until 180) {
                                             delay(10000)
                                             val progress = withContext(Dispatchers.IO) {
                                                 requestMusicStatus(backendUrl, songId)
@@ -218,16 +218,14 @@ private fun SurajSongHome() {
                                                     musicAudioReady = true
                                                     status = "তোমার গান তৈরি হয়েছে! Play generated song চাপো।"
                                                     completed = true
-                                                    return@repeat
                                                 }
                                                 "music_failed" -> {
                                                     status = "Music generation failed: " + progress.optString("error", "Unknown worker error")
                                                     completed = true
-                                                    return@repeat
                                                 }
                                                 else -> status = "গান তৈরি হচ্ছে… GPU worker-এর কাজ শেষ হওয়া পর্যন্ত অপেক্ষা করো।"
                                             }
-                                            if (completed) return@repeat
+                                            if (completed) break
                                         }
                                         if (!completed) status = "Music job এখনো চলছে। পরে আবার status check করো।";
                                     } catch (error: Exception) {
