@@ -52,7 +52,10 @@ class MainActivity : ComponentActivity() {
 private fun SurajSongHome() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = remember { context.getSharedPreferences("surajsong", android.content.Context.MODE_PRIVATE) }
-    var backendUrl by remember { mutableStateOf(preferences.getString("backend_url", "") ?: "") }
+    val defaultBackendUrl = "https://surajsong.onrender.com"
+    var backendUrl by remember {
+        mutableStateOf(preferences.getString("backend_url", null) ?: defaultBackendUrl)
+    }
     var topic by remember { mutableStateOf("") }
     var language by remember { mutableStateOf("bn") }
     var duration by remember { mutableIntStateOf(4) }
