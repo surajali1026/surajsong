@@ -55,6 +55,7 @@ private fun SurajSongHome() {
     var backendUrl by remember { mutableStateOf(preferences.getString("backend_url", "") ?: "") }
     var topic by remember { mutableStateOf("") }
     var language by remember { mutableStateOf("bn") }
+    var duration by remember { mutableIntStateOf(4) }
     var lyrics by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Connect your backend to start creating songs.") }
     var isGenerating by remember { mutableStateOf(false) }
@@ -106,7 +107,17 @@ private fun SurajSongHome() {
                     FilterChip(selected = language == "bn", onClick = { language = "bn" }, label = { Text("বাংলা") })
                     FilterChip(selected = language == "hi", onClick = { language = "hi" }, label = { Text("हिन्दी") })
                 }
-                Text("Target duration: 3–5 minutes · Genre and mood: automatic")
+                Text("Song duration")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(3, 4, 5).forEach { minutes ->
+                        FilterChip(
+                            selected = duration == minutes,
+                            onClick = { duration = minutes },
+                            label = { Text("$minutes min") }
+                        )
+                    }
+                }
+                Text("Genre, mood and singer: automatic")
                 Button(
                     onClick = {
                         if (backendUrl.isBlank() || topic.isBlank()) {
@@ -118,7 +129,7 @@ private fun SurajSongHome() {
                                 status = "AI lyrics তৈরি হচ্ছে…"
                                 try {
                                     val result = withContext(Dispatchers.IO) {
-                                        requestLyrics(backendUrl, topic, language)
+                                        requestLyrics(backendUrl, topic, language, duration)
                                     }
                                     lyrics = result.optString("lyrics")
                                     status = "Lyrics তৈরি হয়েছে। Music worker status: " +
@@ -166,7 +177,7 @@ private fun SurajSongHome() {
     }
 }
 
-private fun requestLyrics(baseUrl: String, topic: String, language: String): JSONObject {
+private fun requestLyrics(baseUrl: String, topic: String, language: String, duration: Int): JSONObject {
     val normalized = baseUrl.trim().trimEnd('/')
     require(normalized.startsWith("https://")) { "Backend URL অবশ্যই https:// দিয়ে শুরু হতে হবে।" }
     val connection = (URL("$normalized/api/v1/songs").openConnection() as HttpURLConnection).apply {
@@ -180,7 +191,7 @@ private fun requestLyrics(baseUrl: String, topic: String, language: String): JSO
         val payload = JSONObject()
             .put("topic", topic)
             .put("language", language)
-            .put("duration_minutes", 4)
+            .put("duration_minutes", duration)
         connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
         val code = connection.responseCode
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
