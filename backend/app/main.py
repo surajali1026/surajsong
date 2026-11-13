@@ -214,7 +214,7 @@ async def generate_music(song_id: str, request: MusicRequest):
         "use_format": False,
         "use_cot_caption": False,
         "use_cot_language": False,
-        "vocal_language": "Bengali" if row["language"] == "bn" else "Hindi",
+        "vocal_language": row["language"],
         "audio_format": "mp3",
         "audio_duration": duration_seconds,
         "bpm": 96,
